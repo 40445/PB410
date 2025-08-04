@@ -1,0 +1,494 @@
+---
+title: "PB410 RMD Commands"
+date:  "`r format(Sys.time(), '%a/%d/%b')`"
+author: "40445"
+always_allow_html: true
+output: 
+  bookdown::pdf_document2:
+    toc: false
+---
+
+I've written this file to look in the same folder as the folder that the script is in and check to see if there are any stata files. If there are the script will read in the stata file and then write it to csv (which can be opened by Excel). Add more comments and explanations where necessaty. Add functions
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE, linewidth=60,tidy=TRUE)
+
+# Check if haven package is installed
+if (!requireNamespace("haven", quietly = TRUE)) {
+  # If not installed, install it
+  install.packages("haven")
+}
+options(scipen=999)
+```
+
+
+```{r convert}
+library(haven)
+library(MASS)
+library(readr)
+library(car)
+library(tidyverse)
+library(data.table)
+library(modelsummary)
+library(fixest)
+library(AER)
+library(haven)
+library(Hmisc)
+library(survival)
+library(survminer)
+#library(gmm)
+library(PerformanceAnalytics)
+library(dplyr)
+library(kableExtra)
+library(stargazer)
+library(hrbrthemes)
+library(ggdist)
+library(ggtext)
+library(MetBrewer)
+library(pROC)
+library(lmtest)
+library(vtable)
+library(leaflet)
+library(sf)
+#library(rnaturalearth)
+library(RColorBrewer)
+library(geojsonio)
+library(htmltools)
+
+# Get the path to the current directory
+current_dir <- dirname(rstudioapi::getActiveDocumentContext()$path)
+
+# List all files in the current directory
+files <- list.files(current_dir)
+
+# Look for Stata files
+stata_files <- files[grep("\\.dta$", files)]
+
+if (length(stata_files) > 0) {
+  # If at least one Stata file is found, read in the first one
+  stata_file <- file.path(current_dir, stata_files[1])
+  data <- read_dta(stata_file)
+  
+  # Define the path for the CSV file
+  csv_file <- file.path(current_dir, paste0(tools::file_path_sans_ext(stata_files[1]), ".csv"))
+  
+  # Write the data to CSV
+  write.csv(data, file = csv_file, row.names = FALSE)
+  
+  cat("Stata file has been successfully converted to CSV:", csv_file, "\n")
+} else {
+  cat("No Stata file found in the current directory.\n")
+}
+
+```
+
+
+```{r}
+
+data <- read.csv("k2015.csv",
+                header = T, sep = ",") %>% dplyr::select(m12,m11,d3,d1,t10,c8,c7,c5,c4,age,sex,urbrur,m1,o13j,v9,v8,v2,v1,h7a,h2a,b17,b8,b5,a12d)%>%
+  mutate(BMI = m12/((m11/100)^2),date = as.Date("2015-01-01"), h2a = ifelse(h2a == 2,0,h2a), h7a =ifelse(h7a == 2,0,h7a),helmet_use_motorcycle =ifelse(v2%in% c(1, 2, 3),v2,NA),
+helmet_use_bike = ifelse(v8%in% c(1, 2, 3),v8,NA),
+seatbelt_use = ifelse(v1%in% c(1, 2, 3),v1,NA),
+times_driven_drinks = ifelse(v9%in% c(88, 77),NA,v9), Country = "Kenya", o13j = ifelse(o13j == 1, 1,ifelse(o13j == 2,0,o13j)),urbrur = ifelse(urbrur == 1, 1,ifelse(urbrur == 2,0,urbrur)),c4 = ifelse(c4==77,NA, c4),c8 = ifelse(c8 == 1, "Government employee",
+         ifelse(c8 == 2, "Non-government employee",
+         ifelse(c8 == 3, "Self-employed",
+         ifelse(c8 == 4, "Non-paid",
+         ifelse(c8 == 5, "Student",
+         ifelse(c8 == 6, "Homemaker",
+         ifelse(c8 == 7, "Retired",
+         ifelse(c8 == 8, "Unemployed (able to work)",
+         ifelse(c8 == 9, "Unemployed (unable to work)",
+         ifelse(c8 == 88, NA, c8)))))))))),t10 = ifelse(t10==77, NA, t10),d1=ifelse(d1==77,NA,d1),
+d3=ifelse(d3==77,NA,d3),"Veg/Fruit Consumption (Weekly)" = ifelse(d1 >= d3, d1, d3),"Drink Hamper Expectations" =NA) %>% rename("Times driven drunk" = times_driven_drinks, "Reduced Social Activities" = o13j, "Undrinkable Liquor Count" = a12d, "Interviewer" = m1, "Rural?" = urbrur, "Years Education" = c4, "Higest Education" = c5, "Marital Status" = c7, "Work Status" = c8, "Height cm"  = m11, "Weight kg" = m12, "Told High BP" = h2a, "Told High Gluc" = h7a, "Age Quit Smoking" = t10,"HDL chol (mmol/l)" = b17, "total cholesterol (mmol/l)" = b8, "fasting blood glucose (mmol/l)" = b5)%>% dplyr::select(-d1,-d3,-v9,-v8,-v2,-v1)
+
+data2 <- read.csv("L_2022_STEPS.csv",
+                header = T, sep = ",")%>%dplyr::select(a12d, a14,m11,m12,d3,d1,c8,c7,c5,c4,age,sex,h2a,h7a,b8,b5,t10) %>% 
+  mutate("HDL chol (mmol/l)" = NA,BMI = m12/((m11/100)^2),date = as.Date("2022-01-01"),  h2a = ifelse(h2a == 2,0,h2a), h7a =ifelse(h7a == 2,0,h7a), Country = "Liberia", "Interviewer" = NA, "Rural?" = NA,c4 = ifelse(c4==77,NA, c4),c5 = ifelse(c5 == 1, "No formal schooling",
+         ifelse(c5 == 2, "Less than primary/elementary school",
+         ifelse(c5 == 3, "Primary school completed",
+         ifelse(c5 == 4, "Junior High Completed",
+         ifelse(c5 == 5, "Senior high completed",
+         ifelse(c5 == 6, "College/University completed",
+         ifelse(c5 == 7, "Graduate/Post graduate degree",
+         ifelse(c5 == 88, NA, c5)))))))),c7 = ifelse(c7 == 1, "Never married",
+         ifelse(c7 == 2, "Currently married",
+         ifelse(c7 == 3, "Separated",
+         ifelse(c7 == 4, "Divorced",
+         ifelse(c7 == 5, "Widowed",
+         ifelse(c7 == 6, "Cohabitating/living together",
+         ifelse(c7 == 88, NA, c7))))))),t10 = ifelse(t10==77, NA, t10),d1=ifelse(d1==77,NA,d1),
+d3=ifelse(d3==77,NA,d3),"Veg/Fruit Consumption (Weekly)" = ifelse(d1 >= d3, d1, d3),c8=ifelse(c8 == 1, "Government employee",
+           ifelse(c8 == 2, "Non-government employee",
+           ifelse(c8 == 3, "Self-employed",
+           ifelse(c8 == 4, "Non-paid/volunteer",
+           ifelse(c8 == 5, "Student",
+           ifelse(c8== 6, "Homemaker/housewife",
+           ifelse(c8 == 7, "Domestic worker",
+           ifelse(c8 == 8, "Retired",
+           ifelse(c8 == 9, "Unemployed (able to work)",
+           ifelse(c8 == 10, "Unemployed (unable to work)",
+           ifelse(c8 == 88, NA, c8))))))))))), "Times driven drunk" = NA, helmet_use_bike = NA, helmet_use_motorcycle = NA, seatbelt_use = NA, "Reduced Social Activities" = NA) %>% rename("Drink Hamper Expectations" = a14, "Undrinkable Liquor Count" = a12d,, "Years Education" = c4, "Higest Education" = c5, "Marital Status" = c7, "Work Status" = c8, "Height cm"  = m11, "Weight kg" = m12,"Told High BP" = h2a,"Told High Gluc" = h7a, , "Age Quit Smoking" = t10, "total cholesterol (mmol/l)" = b8, "fasting blood glucose (mmol/l)" =b5)%>% dplyr::select(-d1,-d3)
+
+data3 <- read.csv("B2021.csv",
+                header = T, sep = ",")%>% dplyr::select(urbanrural, c5, c7, c8, a14, d1,d3,m11,m12, sex,age,c4,h2a,h7a,b17,b8,a12d,t10,b5) %>% 
+  mutate(BMI = m12/((m11/100)^2),date = as.Date("2021-01-01"), h2a = ifelse(h2a == 2,0,h2a), h7a =ifelse(h7a == 2,0,h7a), Country = "Burkina Faso", "Interviewer" = NA,urbanrural = ifelse(urbanrural == "R", 1,ifelse(urbanrural == "U",0, urbanrural)),c4 = ifelse(c4==77,NA, c4),c5 = ifelse(c5 == 1, "No formal schooling",
+         ifelse(c5 == 2, "Less than primary/elementary school",
+         ifelse(c5 == 3, "Primary school completed",
+         ifelse(c5 == 4, "Junior High Completed",
+         ifelse(c5 == 5, "Senior high completed",
+         ifelse(c5 == 6, "College/University completed",
+         ifelse(c5 == 7, "Graduate/Post graduate degree",
+         ifelse(c5 == 88, NA, c5)))))))),c7 = ifelse(c7 == 1, "Never married",
+         ifelse(c7 == 2, "Currently married",
+         ifelse(c7 == 3, "Separated",
+         ifelse(c7 == 4, "Divorced",
+         ifelse(c7 == 5, "Widowed",
+         ifelse(c7 == 6, "Cohabitating/living together",
+         ifelse(c7 == 88, NA, c7))))))),c8 = ifelse(c8 == 1, "Government employee",
+         ifelse(c8 == 2, "Non-government employee",
+         ifelse(c8 == 3, "Self-employed",
+         ifelse(c8 == 4, "Non-paid",
+         ifelse(c8 == 5, "Student",
+         ifelse(c8 == 6, "Homemaker",
+         ifelse(c8 == 7, "Retired",
+         ifelse(c8 == 8, "Unemployed (able to work)",
+         ifelse(c8 == 9, "Unemployed (unable to work)",
+         ifelse(c8 == 88, NA, c8)))))))))),t10 = ifelse(t10==77, NA, t10),d1=ifelse(d1==77,NA,d1),
+d3=ifelse(d3==77,NA,d3),"Veg/Fruit Consumption (Weekly)" = ifelse(d1 >= d3, d1, d3),"Times driven drunk" = NA, helmet_use_bike = NA, helmet_use_motorcycle = NA, seatbelt_use = NA, "Reduced Social Activities" = NA
+)  %>% rename("Drink Hamper Expectations" = a14, "Undrinkable Liquor Count" = a12d, "Rural?" = urbanrural, "Years Education" = c4, "Higest Education" = c5, "Marital Status" = c7, "Work Status" = c8, "Height cm"  = m11, "Weight kg" = m12,"Told High BP" = h2a,"Told High Gluc" = h7a, "Age Quit Smoking" = t10, "HDL chol (mmol/l)" = b17, "total cholesterol (mmol/l)" = b8,"fasting blood glucose (mmol/l)" = b5)%>% dplyr::select(-d1,-d3)
+
+data4<-read.csv("vnm2021.csv",
+                header = T, sep = ",")%>% dplyr::select( c5, c7, c8, a14, d1,d3,m11,m12, sex,age,c4,h2a,h7a,b17,b8,b5,v9, t10) %>% mutate(BMI = m12/((m11/100)^2),date = as.Date("2021-01-01"), h2a = ifelse(h2a == 2,0,h2a), h7a =ifelse(h7a == 2,0,h7a), Country = "Vietnam", "Undrinkable Liquor Count" = NA, "Interviewer" = NA, "Rural?" = NA,c4 = ifelse(c4==77,NA, c4),c5 = ifelse(c5 == 1, "No formal schooling",
+         ifelse(c5 == 2, "Less than primary/elementary school",
+         ifelse(c5 == 3, "Primary school completed",
+         ifelse(c5 == 4, "Junior High Completed",
+         ifelse(c5 == 5, "Senior high completed",
+         ifelse(c5 == 6, "College/University completed",
+         ifelse(c5 == 7, "Graduate/Post graduate degree",
+         ifelse(c5 == 88, NA, c5)))))))),c7 = ifelse(c7 == 1, "Never married",
+         ifelse(c7 == 2, "Currently married",
+         ifelse(c7 == 3, "Separated/Divorced",
+         ifelse(c7 == 4, "Widowed",
+         ifelse(c7 %in% c(8, 9), NA,c7))))),d1=ifelse(d1==77,NA,d1),
+d3=ifelse(d3==77,NA,d3),"Veg/Fruit Consumption (Weekly)" = ifelse(d1 >= d3, d1, d3),c8=ifelse(c8 == 1, "Government employee",
+          ifelse(c8 == 2, "Non-government employee",
+          ifelse(c8 == 3, "Self-employed/ freelance",
+          ifelse(c8 == 4, "Student",
+          ifelse(c8 == 5, "Homemaker",
+          ifelse(c8 == 6, "Retired",
+          ifelse(c8 == 7, "Unemployed (able to work)",
+          ifelse(c8 == 8, "Unemployed (unable to work)",
+          ifelse(c8 == 9, "Other",
+          ifelse(c8 %in% c(88, 99), NA, c8)))))))))), helmet_use_bike = NA, helmet_use_motorcycle = NA,seatbelt_use = NA, "Reduced Social Activities" = NA)  %>% rename("Times driven drunk" = v9, "Drink Hamper Expectations" = a14, "Years Education" = c4, "Higest Education" = c5, "Marital Status" = c7, "Work Status" = c8, "Height cm"  = m11, "Weight kg" = m12,"Told High BP" = h2a,"Told High Gluc" = h7a, "Age Quit Smoking" = t10, "HDL chol (mmol/l)" =b17, "total cholesterol (mmol/l)" = b8, "fasting blood glucose (mmol/l)" = b5) %>% dplyr::select(-d1,-d3)
+
+#helmet_use_motorcycle =ifelse(v2%in% c(1, 2, 3),v2,NA),
+#helmet_use_bike = ifelse(v8%in% c(1, 2, 3),v8,NA),
+#seatbelt_use = ifelse(v1%in% c(1, 2, 3),v1,NA),
+#times_driven_drinks = ifelse(v9%in% c(88, 77),NA,v9)
+#"Veg/Fruit Consumption (Weekly)" = remove 77s first. Then Max d1,d3
+
+master_file<-rbind(data,data2,data3,data4) %>% mutate(`Told High BP`=as.factor(ifelse(`Told High BP`==9,NA,`Told High BP`)),`Told High Gluc`=as.factor(ifelse(`Told High Gluc`==9,NA,`Told High Gluc`)), Country = as.factor(Country),sex = as.factor(sex), `Rural?` = as.factor(`Rural?`))
+```
+
+Added dates field
+
+Can do negative selection (instead of adding we remove columns)
+
+```{r}
+#correlation matrix
+#corr_matrix1<-master_file
+#res2 <- rcorr(as.matrix(corr_matrix1))
+# Extract the correlation coefficients
+#res2$r
+# Extract p-values
+#res2$P
+```
+
+This section provides a simple function for formatting a correlation matrix into a table with 4 columns containing :
+
+    Column 1 : row names (variable 1 for the correlation test)
+    Column 2 : column names (variable 2 for the correlation test)
+    Column 3 : the correlation coefficients
+    Column 4 : the p-values of the correlations
+
+```{r}
+# ++++++++++++++++++++++++++++
+# flattenCorrMatrix
+# ++++++++++++++++++++++++++++
+# cormat : matrix of the correlation coefficients
+# pmat : matrix of the correlation p-values
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+    )
+}
+```
+
+
+```{r}
+#res2<-rcorr(as.matrix(corr_matrix1))
+#flattenCorrMatrix(res2$r, res2$P)
+#my_data <- corr_matrix1
+#chart.Correlation(my_data, histogram=TRUE, pch=19)
+```
+
+
+Durbin Wu Hausman Specification Test to find variables that are determined by other variables in the system. filter v2 and v8 to only include answers 1 (all the time) 2 (sometimes) 3 (never). Change outcome vars from 1 and 2 to 1 and 0. Replaced values in column v9 that records number of times driven drunk in the past 30 days which has 77 for dont know and 88 for refused to answer.
+
+```{r}
+#controls <- c("v9","m11","d1","t10","t1","c5","age","sex","pid","v10","o13j","v9","v1","m1")
+#controls2 <- c("m11","d1","t10","t1","c7","c5","age","sex","pid","v10","o13j","v9","v1","m1")
+#formula1 <- as.formula(paste0("h7a", " ~ ", paste(controls, collapse = "+"), 
+                            #  " | c8+", paste(controls2, collapse = "+")))
+
+# Trying a basic IV regression ()
+#iv_model <- ivreg(h7a ~ X + controls | urbrur + controls, data = df)  
+#iv_model1 <-ivreg(formula1, data=data)
+#lmmod<-lm(h7a~m11+d1+t10+t1+c8+c7+c5+age+sex+pid+m1+v10+o13j+v9+v2+v1+m1, data=data)
+
+# Durbin-Wu-Hausman test. significant p-value suggests endogeneity is present
+#summary(iv_model1, diagnostics = T)
+```
+
+#MLR models (include diagnostics) from feols
+
+Interactions strategy OLS
+
+```{r}
+master_file2 <- master_file %>%
+  rename(
+    hdl = `HDL chol (mmol/l)`,
+    fruit_veg = `Veg/Fruit Consumption (Weekly)`,
+    glucose = `fasting blood glucose (mmol/l)`,
+    rural = `Rural?`,
+    edu_years = `Years Education`,
+    weight = `Weight kg`,
+    height = `Height cm`) %>% mutate(bad_chol = `total cholesterol (mmol/l)` - hdl, `Work Status` = as.factor(`Work Status`),`Marital Status` = as.factor(`Marital Status`), censoring_status=1, `Reduced Social Activities` = as.factor(`Reduced Social Activities`)) %>% filter(age>18) %>% mutate(Healthy = ifelse(BMI>25,0,1), Employed = ifelse(grepl("Unemployed", `Work Status`), 0, 1), Married = ifelse(grepl("Currently", `Marital Status`), 1, 0), seatbelt_used = ifelse(seatbelt_use == 1,1,0)) 
+```
+
+
+```{r}
+#https://r-charts.com/colors/
+#response vars for health outcomes: hdlcol, total chol, fasting glucose
+mod1<-lm(hdl ~ fruit_veg +BMI+glucose + rural + glucose:rural + sex + age + edu_years +edu_years:rural+edu_years:sex+fruit_veg:sex+fruit_veg:rural,
+      data = master_file2) 
+
+## QQ and leverage plots are for assessing outliers
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page
+plot(mod1)
+
+#tests for homoscedasticity/ constant variance of errors acorss observations. null error variance is constant alternate: error variance is not constant  changes as the values of the predictors change
+ncvTest(mod1)
+
+#multicollinearity test to chck if predictors are correlated. value of 1 indicates no multicollinearity. anything above 5 is problematic
+
+sqrt(vif(mod1))
+
+
+stargazer(mod1, out = "table1.html", title = "Table 1", single.row = TRUE, dep.var.labels = "HDL Cholesterol Level (mmol per l)", covariate.labels = c("Fruit, Veg Consump.", "Body Mass Index", "Fasting Blood Glucose Level", "Rural Resident", "Gender", "Age", "Years in Education", "Fasting Blood Glucose Level x Rural Resident", "Years in Education x Rural Resident", "Years in Education x Gender", "Fruit, Veg Consump. x Gender", "Fruit, Veg Consump. x Rural Resident", "Intercept"))
+
+dp1<-master_file2 %>% filter(hdl<75)
+ggplot(dp1, aes(x=hdl, color = Country))+geom_density(fill=NA)+scale_color_manual(values = c("#008080", "#FF6F61","gold3"))+geom_vline(xintercept = c(1, 1.2), linetype = "dashed", color = "black")+theme_ipsum()+xlab("HDL Cholesterol Distribution") + ylab("Probability Density")
+```
+
+```{r}
+mod2<-lm(`total cholesterol (mmol/l)` ~ fruit_veg +BMI +glucose + rural + glucose:rural + sex + age + edu_years + edu_years:rural+edu_years:sex+fruit_veg:sex+fruit_veg:rural,
+      data = master_file2)
+#stargazer(mod2, out = "table2.html",
+          #title = "Table 2",single.row = TRUE,
+        #  dep.var.labels = c("Total Cholesterol Level (mmol per l)"),covariate.labels = c("Fruit, Veg Consump.", "Body Mass Index", "Fasting Blood Glucose Level", "Rural Resident", "Gender", "Age", "Years in Education", "Fasting Blood Glucose Level x Rural Resident", "Years in Education x Rural Resident", "Years in Education x Gender", "Fruit, Veg Consump. x Gender", "Fruit, Veg Consump. x Rural Resident", "Intercept"))
+summary(mod2)
+```
+
+```{r}
+mod3<-lm(bad_chol ~ fruit_veg +BMI +glucose + rural + glucose:rural + sex + age + edu_years +edu_years:`Told High Gluc`+edu_years:rural+fruit_veg:`Told High BP`+fruit_veg:`Told High Gluc` +`Told High Gluc` + `Told High BP` +glucose:`Told High Gluc` + glucose:`Told High BP`,
+      data = master_file2)
+summary(mod3)
+```
+
+```{r}
+c("Fruit, Veg Consump.", "Body Mass Index", "Fasting Blood Glucose Level", "Rural Resident", "Gender", "Age", "Years in Education", "Fasting Blood Glucose Level x Rural Resident", "Years in Education x Rural Resident", "Years in Education x Gender", "Fruit, Veg Consump. x Gender", "Fruit, Veg Consump. x Rural Resident", "Intercept")
+
+master_file3 <- master_file2 %>% filter(Country == "Kenya") %>% mutate(Healthy_BMI = ifelse(BMI>25,0,1))
+master_file4 <- master_file2 %>% filter(Country == "Vietnam")%>% mutate(Healthy_BMI = ifelse(BMI>25,0,1))
+master_file5 <- master_file2 %>% filter(Country == "Burkina Faso")%>% mutate(Healthy_BMI = ifelse(BMI>25,0,1))
+master_file6 <- master_file2 %>% filter(Country == "Liberia")%>% mutate(Healthy_BMI = ifelse(BMI>25,0,1))
+
+#fit this separately for all countries
+#mod4<-lm(glucose ~ fruit_veg +BMI +`total cholesterol (mmol/l)` + rural + `total cholesterol (mmol/l)`:rural + sex + age + edu_years +edu_years:rural+edu_years:sex+fruit_veg:sex+fruit_veg:rural, data = master_file3)
+mod4<-lm(glucose ~ fruit_veg +BMI +`total cholesterol (mmol/l)` + sex + age + edu_years +edu_years:sex+fruit_veg:sex, data = master_file6)
+
+stargazer(mod4, out = "table4.html",
+          title = "Liberia",single.row = TRUE,
+          dep.var.labels = c("Fasting Blood Glucose Level (mmol per l)"),covariate.labels = c("Fruit, Veg Cons.", "Body Mass Index", "Total Cholesterol Level", "Gender", "Age", "Years in Education","Years in Education x Gender", "Fruit, Veg Cons. x Gender", "Intercept"))
+
+dp2<-master_file2 %>% filter(glucose<20) %>% rename("Gender" = sex)
+
+ggplot(dp2, aes(x=glucose, color = Gender))+geom_density(fill = NA)+scale_color_manual(values = c("#008080","gold3"))+geom_vline(xintercept = c(5.5, 6.9), linetype = "dashed", color = "black")+theme_ipsum()+xlab("Fasting Blood Glucose Levels Distribution \n 34% of respondents are pre diabetic, falling in the 5.5 to 6.9 mmol/l level range") + ylab("Probability Density")+annotate("rect", xmin = 5.5, xmax = 6.9, ymin = 0, ymax = Inf,
+           alpha = 0.3, fill = "darkred") 
+car::vif(mod4)
+shapiro.test(residuals(mod4))
+lmtest::bptest(mod4)
+dwt(mod4)
+```
+
+# risky behaviours analysis. 
+ 
+```{r}
+#https://r-graph-gallery.com/294-basic-ridgeline-plot.html#color
+```
+
+
+```{r}
+#other class of main predictive vars for risky beh: seatbelt use (1 all the time, 2 sometimes, 3 never), times driven drunk in past 30 days
+mod5<-glm(Healthy ~  `Times driven drunk` + sex + age + edu_years + Married + Employed + `Age Quit Smoking`+ fruit_veg, family = "binomial",data = master_file2)
+
+stargazer(mod5, out = "logistic.html",
+          title = "All Countries Combined",single.row = TRUE, dep.var.labels = c("Healthy BMI?"),covariate.labels = c("Drunk Driving Freq.", "Gender", "Age", "Years in Education", "Married?", "Employed?", "Age Quit Smoking", "Fruit, Veg Cons."))
+
+# Step 2: Get predicted probabilities
+prob <- predict(mod5, type = "response")
+
+removed_indices <- na.action(mod5)
+filtered <- master_file2[-removed_indices, ]
+# Step 3: Create ROC object and plot
+roc_obj <- roc(filtered$Healthy, prob)
+plot(roc_obj, col = "blue", main = "ROC Curve")
+auc(roc_obj)  # Get AUC value
+```
+
+```{r}
+predict_healthy_bmi <- function(gender, education, married) {
+  # Logistic regression coefficients (rounded based on your formula approximation)
+  intercept <- 3.4
+  beta_drunk <- 0.3           # Drunk Driving Frequency
+  beta_gender <- -1.3     # Gender (0 = male? , 1 = woman?)
+  beta_education <- -0.1      # Years in Education
+  beta_married <- -1.1        # Married (1 = yes, 0 = no)
+  beta_age <- 0.022
+
+  # Linear combination
+  linear_combination <- intercept +
+                        beta_drunk * 0.55 +
+                        beta_gender * gender +
+                        beta_education * education +
+                        beta_married * married +
+                        beta_age * 40
+
+  # Logistic (sigmoid) function to convert to probability
+  probability <- 1 / (1 + exp(-linear_combination))
+
+  return(probability)
+}
+education_mean <- 7.3
+```
+
+Compute Likelihood Ratio test p-value for each predictor.
+
+
+```{r}
+# Fit the null model (restricted)
+mod6<-glm(Healthy ~  1, family = "binomial",data = master_file2)
+# Perform likelihood ratio test
+# Manual LRT
+LL_null <- logLik(mod6)
+LL_full <- logLik(mod5)
+LRT_stat <- 2 * (as.numeric(LL_full) - as.numeric(LL_null))
+df <- attr(LL_full, "df") - attr(LL_null, "df")
+p_value <- pchisq(LRT_stat, df, lower.tail = FALSE)
+```
+
+Plots
+
+Average BMI by country: BMI. Proportion with no formal schooling by country `Higest Education` == "No formal schooling"
+
+```{r}
+st(master_file2, group = 'Country', group.test = TRUE)
+st(master_file2, group = 'Country', group.long = TRUE)
+sumtable(master_file2)
+```
+
+
+```{r}
+# Summarize BMI
+bmi_summary <- master_file2 %>%
+  dplyr::group_by(Country) %>%
+  dplyr::summarise(median_bmi = median(BMI, na.rm = T), mean_BMI = mean (BMI, na.rm = T),sd_bmi = sd(BMI, na.rm = TRUE)) 
+
+# Read GeoJSON file (adjust path as needed)
+world <- geojson_read("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson", what = "sp")  # or use "sf" if you're using sf
+
+# Filter for countries of interest
+countries_of_interest <- c("Vietnam","Burkina Faso", "Liberia", "Kenya")
+world_subset <- world[world$name %in% countries_of_interest, ]
+
+# Merge with BMI data
+world_subset@data <- left_join(world_subset@data, bmi_summary, by = c("name" = "Country"))
+
+# Color palette
+pal <- colorNumeric(palette = "Reds", domain = c(21, 24))
+
+#extra component for map
+stats_html <- sprintf(
+  "<div style='padding: 10px 12px; font: 18px Arial, sans-serif; background: white; line-height: 1.4;'>
+     <strong>Mean BMI:</strong> %.2f<br/>
+     <strong>SD BMI:</strong> %.2f
+   </div>",
+  bmi_summary$mean_bmi,
+  bmi_summary$sd_bmi
+)
+
+# Build leaflet map
+leaflet(world_subset) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    fillColor = ~pal(median_bmi),
+    color = "white",
+    weight = 1,
+    fillOpacity = 0.8,
+    popup = ~paste(name, "<br>Median BMI:", round(median_bmi, 1))
+  ) %>%
+  addLegend(pal = pal, values = ~world_subset@data$median_bmi,
+            title = "Median BMI", position = "bottomright") %>%
+   addControl(html = HTML(stats_html), position = "bottomright", className = "stats-legend")
+
+```
+
+
+```{r}
+education_summary <- master_file2 %>%
+  group_by(Country) %>%
+  summarise(
+    no_schooling_count = sum(`Higest Education` == "No formal schooling", na.rm = TRUE),
+    total = n(),
+    percent_no_schooling = no_schooling_count*100 / total
+  )
+
+world <- geojson_read("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson", what = "sp")
+
+countries_of_interest <- c("Vietnam", "Burkina Faso", "Liberia", "Kenya")
+world_subset <- world[world$name %in% countries_of_interest, ]
+
+world_subset@data <- left_join(world_subset@data, education_summary, by = c("name" = "Country"))
+
+# Define palette with Reds, domain from 0 to max proportion (or 1)
+pal <- colorNumeric(palette = "Reds", domain = c(13,45))
+
+leaflet(world_subset) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    fillColor = ~pal(percent_no_schooling),
+    color = "white",
+    weight = 1,
+    fillOpacity = 0.8,
+    popup = ~paste(name, "<br>Proportion no formal schooling:", scales::percent(percent_no_schooling, accuracy = 0.1))
+  ) %>%
+  addLegend(pal = pal, values = ~percent_no_schooling,
+            title = "% no schooling", position = "bottomright")
+```
+
